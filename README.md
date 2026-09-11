@@ -8,13 +8,13 @@
 
 ```bash
 git clone https://github.com/jaxhur/END.git
+cd END
 # 仅首次执行：创建并激活独立环境。
 conda create -n end python=3.10 -y
 conda activate end
 
 
 python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install 
 python -m pip install -r requirements.txt
 ```
 
@@ -30,8 +30,8 @@ gdown "https://drive.google.com/uc?id=1mAN3ll5wWwt1Xz0C7uio31-NJu-50S8Z" -O LOL-
 gdown "https://drive.google.com/uc?id=1L0UnJg6gZ4Eb7It2EuNxP0L3lQNmKMaP" -O LOL-v2-renamed.zip
 
 # 解压至当前训练配置实际读取的目录。
-unzip -q LOL-v1.zip -d LOL-v1
-unzip -q LOL-v2-renamed.zip -d LOL-v2
+unzip  LOL-v1.zip -d LOL-v1
+unzip - LOL-v2-renamed.zip -d LOL-v2
 cd ..
 ```
 

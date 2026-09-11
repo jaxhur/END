@@ -6,4 +6,5 @@ tqdm>=4.66
 tensorboard>=2.14
 natsort
 lpips==0.1.4
-thop>=0.1.1.post2209072238
+# 固定官方 THOP 版本，避免解析到同名 fork 或后续不兼容实现。
+thop==0.1.1.post2209072238

@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn as nn
 
@@ -46,7 +48,13 @@ class CALayer(nn.Module):
 class CAB(nn.Module):
     def __init__(self, n_feat, kernel_size, reduction, bias, act):
         super(CAB, self).__init__()
-        modules_body = [Conv(n_feat, n_feat, kernel_size, bias=bias), act, Conv(n_feat, n_feat, kernel_size, bias=bias)]
+        # RCAB 会构造多个 CAB；复制激活层以避免它们共享同一个 ReLU，
+        # 从而保证 THOP 的 forward hook 与统计 buffer 一一对应。
+        modules_body = [
+            Conv(n_feat, n_feat, kernel_size, bias=bias),
+            copy.deepcopy(act),
+            Conv(n_feat, n_feat, kernel_size, bias=bias),
+        ]
 
         self.CA = CALayer(n_feat, reduction, bias=bias)
         self.body = nn.Sequential(*modules_body)
