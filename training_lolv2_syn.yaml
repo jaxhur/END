@@ -1,0 +1,30 @@
+# 沿用论文 END 的优化超参数，在 LOL-v2-syn 上独立训练和测试。
+experiment:
+  name: END_LOL-v2-syn
+  seed: 1234
+
+dataset:
+  name: LOL-v2-syn
+  train_split: Synthetic/Train
+  val_split: Synthetic/Test
+  train_lq: dataset/LOL-v2/Synthetic/Train/Low
+  train_gt: dataset/LOL-v2/Synthetic/Train/Normal
+  val_lq: dataset/LOL-v2/Synthetic/Test/Low
+  val_gt: dataset/LOL-v2/Synthetic/Test/Normal
+
+training:
+  # 按用户要求沿用论文的 5000 epochs、16 batch、128x128 paired random crop。
+  epochs: 5000
+  batch_size: 16
+  patch_size: 128
+  workers: 4
+  lr_initial: 1.0e-4
+  lr_min: 1.0e-6
+  # 与论文 END 一致，不额外引入升温阶段。
+  warmup_epochs: 0
+  # 默认保持论文原始数值路径；目标服务器冒烟确认后可改为 true。
+  amp: false
+  cudnn_benchmark: true
+  print_freq: 20
+  val_freq: 1000
+  save_freq: 1000

@@ -1,0 +1,8 @@
+# PyTorch 与 torchvision 请按目标服务器的 CUDA 12.8+ wheel 单独安装，避免被 CPU wheel 覆盖。
+numpy>=1.26
+opencv-python>=4.8
+PyYAML>=6.0
+tqdm>=4.66
+tensorboard>=2.14
+lpips==0.1.4
+thop>=0.1.1.post2209072238

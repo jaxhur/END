@@ -1,25 +1,31 @@
-# Training configuration
-GPU: [0,1,2,3]
+# 论文 END 在 LOL-v1 上的训练设置；所有路径相对于项目根目录。
+experiment:
+  name: END_LOL-v1
+  seed: 1234
 
-VERBOSE: False
+dataset:
+  name: LOL-v1
+  train_split: our485
+  val_split: eval15
+  train_lq: dataset/LOL-v1/our485/low
+  train_gt: dataset/LOL-v1/our485/high
+  val_lq: dataset/LOL-v1/eval15/low
+  val_gt: dataset/LOL-v1/eval15/high
 
-MODEL:
-  MODE: 'LOL_END'      #Illum_YCRCB_Denoise_IN_w
-
-# Optimization arguments.
-OPTIM:
-  BATCH: 16
-  EPOCHS: 1000
-  # NEPOCH_DECAY: [10]
-  LR_INITIAL: 1e-4
-  LR_MIN: 1e-6
-  # BETA1: 0.9
-
-TRAINING:
-  VAL_AFTER_EVERY: 1
-  RESUME: False
-  TRAIN_PS: 128
-  VAL_PS: 256
-  TRAIN_DIR: 'G:\low-light_image_enhancement\Our\dataset\LOL\our485'       # path to training data
-  VAL_DIR: 'G:\low-light_image_enhancement\Our\dataset\LOL\eval15' # path to validation data
-  SAVE_DIR: 'checkpoints'           # path to save models_v1 and images
+training:
+  # 论文训练细节：5000 epochs、batch size 16、128x128 paired random crop。
+  epochs: 5000
+  batch_size: 16
+  patch_size: 128
+  workers: 4
+  lr_initial: 1.0e-4
+  lr_min: 1.0e-6
+  # 论文仅使用从 1e-4 到 1e-6 的余弦退火，不额外引入升温阶段。
+  warmup_epochs: 0
+  # 论文未声明 AMP；默认关闭以保持原始数值路径，可在目标 GPU 冒烟后显式打开。
+  amp: false
+  cudnn_benchmark: true
+  # 每 20 iter 训练日志；约每 1000 iter 完整 eval15 验证并保存 best_G.pth。
+  print_freq: 20
+  val_freq: 1000
+  save_freq: 1000
