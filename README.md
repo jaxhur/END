@@ -8,14 +8,17 @@
 
 ```bash
 git clone https://github.com/jaxhur/END.git
+git clone https://gitee.com/wallcaptain/END.git
+
 cd END
 # 仅首次执行：创建并激活独立环境。
 conda create -n end python=3.10 -y
+conda init
 conda activate end
 
 
-python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-python -m pip install -r requirements.txt
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
 ```
 
 
@@ -31,7 +34,7 @@ gdown "https://drive.google.com/uc?id=1L0UnJg6gZ4Eb7It2EuNxP0L3lQNmKMaP" -O LOL-
 
 # 解压至当前训练配置实际读取的目录。
 unzip  LOL-v1.zip -d LOL-v1
-unzip - LOL-v2-renamed.zip -d LOL-v2
+unzip  LOL-v2-renamed.zip -d LOL-v2
 cd ..
 ```
 
@@ -58,11 +61,19 @@ dataset/LOL-v2/Real_captured/Test/{Low,Normal}
 
 ## 训练
 
+- v1
+  - 4080：14h，0.135\*6.8\*14=13
+  - 4090：10h，1.98*10=19.8😅
+
 ```bash
 # 只选一张可见卡；不要在代码中修改 CUDA device index。
-CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training.yaml
-CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training_lolv2_syn.yaml
+CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training.yaml;CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training_lolv2_syn.yaml
+
 CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training_lolv2_real.yaml
+
+CUDA_VISIBLE_DEVICES=0 python train_denoise.py --config training_lolv2_syn.yaml
+
+
 ```
 
 

@@ -93,9 +93,31 @@ def main() -> None:
     )
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=int(config["training"].get("workers", 4)), pin_memory=True)
     model = Illum_YCRCB_Denoise_IN().to(device)
-    load_generator_weights(model, weights_path, device)
+    ignored_thop_keys = load_generator_weights(model, weights_path, device)
+    if ignored_thop_keys:
+        logger.warning(
+            "[%s][TEST][CHECKPOINT] ignored_thop_buffers=%d; 这些临时统计键不参与模型推理。",
+            experiment_name,
+            len(ignored_thop_keys),
+        )
     model.eval()
-    complexity = calculate_model_complexity(model, device)
+    try:
+        complexity = calculate_model_complexity(model, device)
+    except Exception as exc:
+        # 复杂度统计失败不能阻断逐图质量评估、增强图保存和 metric.csv 生成。
+        complexity = {
+            "params_m": float(sum(parameter.numel() for parameter in model.parameters()) / 1e6),
+            "gmacs_g": float("nan"),
+            "gflops_g": float("nan"),
+            "input_size": "1x3x256x256",
+            "complexity_tool": "thop.profile",
+            "complexity_note": f"THOP failed: {type(exc).__name__}: {exc}",
+        }
+        logger.error(
+            "[%s][TEST][COMPLEXITY] THOP 失败；继续计算 PSNR/SSIM/LPIPS，GMACs/GFLOPs 将记录为 nan：%s",
+            experiment_name,
+            exc,
+        )
     lpips_model = lpips.LPIPS(net="alex", version="0.1").to(device).eval()
     psnr_scores, ssim_scores, lpips_scores = [], [], []
 

@@ -16,6 +16,9 @@ import torch
 import torch.nn.functional as functional
 
 
+_THOP_BUFFER_NAMES = frozenset({"total_ops", "total_params"})
+
+
 class BeijingFormatter(logging.Formatter):
     """把日志时间稳定转换为北京时间，而不是依赖服务器的系统时区。"""
 
@@ -122,17 +125,49 @@ def unwrap_state_dict(payload: Any) -> Dict[str, torch.Tensor]:
     return state_dict
 
 
-def load_generator_weights(model: torch.nn.Module, weights: Path, device: torch.device) -> None:
-    """加载仅供推理/测试使用的 ``*_G.pth`` 生成网络权重。"""
+def strip_thop_state_entries(state_dict: Dict[str, torch.Tensor]) -> Tuple[Dict[str, torch.Tensor], Tuple[str, ...]]:
+    """移除错误遗留在 checkpoint 中的 THOP 临时统计 buffer。"""
+    removed_keys = tuple(
+        key for key in state_dict if key.rsplit(".", maxsplit=1)[-1] in _THOP_BUFFER_NAMES
+    )
+    if not removed_keys:
+        return state_dict, removed_keys
+
+    # 使用原映射的 copy，保留 OrderedDict 的顺序与可能存在的元数据。
+    cleaned_state_dict = state_dict.copy()
+    for key in removed_keys:
+        cleaned_state_dict.pop(key)
+    return cleaned_state_dict, removed_keys
+
+
+def _clear_thop_runtime_artifacts(model: torch.nn.Module) -> None:
+    """清理 THOP 异常中断后残留的 hook 和非模型 buffer。"""
+    for module in model.modules():
+        for buffer_name in _THOP_BUFFER_NAMES:
+            module._buffers.pop(buffer_name, None)
+
+        # 仅移除来自 THOP 的 hook，不触碰模型或调用方注册的其他 hook。
+        for hook_id, hook in tuple(module._forward_hooks.items()):
+            hook_function = getattr(hook, "func", hook)
+            hook_module = getattr(hook_function, "__module__", "")
+            if hook_module == "thop" or hook_module.startswith("thop."):
+                module._forward_hooks.pop(hook_id, None)
+
+
+def load_generator_weights(model: torch.nn.Module, weights: Path, device: torch.device) -> Tuple[str, ...]:
+    """加载 ``*_G.pth``，并返回被忽略的历史 THOP 临时键名。"""
     if not weights.is_file():
         raise FileNotFoundError(f"权重不存在：{weights}")
-    model.load_state_dict(unwrap_state_dict(_torch_load(weights, device)), strict=True)
+    state_dict, removed_keys = strip_thop_state_entries(unwrap_state_dict(_torch_load(weights, device)))
+    model.load_state_dict(state_dict, strict=True)
+    return removed_keys
 
 
 def save_generator_weights(model: torch.nn.Module, path: Path) -> None:
     """保存不含 optimizer 等训练状态的纯生成网络权重。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), path)
+    state_dict, _ = strip_thop_state_entries(model.state_dict())
+    torch.save(state_dict, path)
 
 
 def find_latest_training_state(state_dir: Path) -> Optional[Path]:
@@ -150,7 +185,10 @@ def find_latest_training_state(state_dir: Path) -> Optional[Path]:
 def save_training_state(path: Path, state: Dict[str, Any]) -> None:
     """保存可自动续训所需的模型进度、优化器、scheduler 与 AMP 状态。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(state, path)
+    saved_state = state.copy()
+    if isinstance(saved_state.get("state_dict"), dict):
+        saved_state["state_dict"], _ = strip_thop_state_entries(saved_state["state_dict"])
+    torch.save(saved_state, path)
 
 
 def load_training_state(path: Path, device: torch.device) -> Dict[str, Any]:
@@ -158,6 +196,9 @@ def load_training_state(path: Path, device: torch.device) -> Dict[str, Any]:
     state = _torch_load(path, device)
     if not isinstance(state, dict):
         raise TypeError(f"训练状态格式错误：{path}")
+    if isinstance(state.get("state_dict"), dict):
+        state = state.copy()
+        state["state_dict"], _ = strip_thop_state_entries(state["state_dict"])
     return state
 
 
@@ -170,12 +211,16 @@ def calculate_model_complexity(model: torch.nn.Module, device: torch.device) -> 
 
     params_m = sum(parameter.numel() for parameter in model.parameters()) / 1e6
     was_training = model.training
-    model.eval()
-    dummy = torch.randn(1, 3, 256, 256, device=device)
-    with torch.no_grad():
-        macs, _ = profile(model, inputs=(dummy,), verbose=False)
-    if was_training:
-        model.train()
+    # 先清理历史异常留下的 THOP hook；finally 保证本次统计失败也不会污染训练或 checkpoint。
+    _clear_thop_runtime_artifacts(model)
+    try:
+        model.eval()
+        dummy = torch.randn(1, 3, 256, 256, device=device)
+        with torch.no_grad():
+            macs, _ = profile(model, inputs=(dummy,), verbose=False)
+    finally:
+        _clear_thop_runtime_artifacts(model)
+        model.train(was_training)
     return {
         "params_m": float(params_m),
         "gmacs_g": float(macs / 1e9),
